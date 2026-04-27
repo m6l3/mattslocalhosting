@@ -33,7 +33,7 @@ This section is for the person who wants to create and share a game session.
 1. On the welcome screen, click **Create Server**.
 2. Fill in the following fields:
    - **User ID** — your numeric user ID. You can find it in your profile URL (`.com/users/XXXXXXXXXX/profile`).
-   - **Playit.gg Address** — the tunnel address provided by Playit.gg in the format `hostname:port` (e.g. `higher-disposition.gl.at.ply.gg:2142`). Leave this blank if you only intend to test locally.
+   - **Playit.gg Address** — the tunnel address provided by Playit.gg in the format `hostname:port` (e.g. `ur-shit.gl.at.ply.gg:6767`). Leave this blank if you only intend to test locally.
    - **TeamTest Server Port** — the port Studio will listen on. Default is `55555`. Change this only if the port is already in use on your machine.
 3. Click **Create**. The server console will open and Studio will launch automatically as a TeamTest server.
 4. Wait approximately 5 seconds for Studio to initialize. Once the status reads **SERVER IS LIVE**, the server is ready.
