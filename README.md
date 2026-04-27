@@ -17,11 +17,9 @@ Install Python dependencies (standard library only — no pip install required).
 
 ## Installation
 
-1. Go to Releases and
+1. Go to Releases and install last release .exe file
+2. Run it
 
-```
-python ultimate_localhost.py
-```
 
 On first launch, a loading screen will appear while the app searches for your Studio installation via PowerShell. This takes a few seconds. If Studio is not found, you will see a warning — verify that Roblox Studio is installed before proceeding.
 
