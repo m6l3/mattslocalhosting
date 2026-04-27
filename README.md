@@ -60,3 +60,7 @@ This section is for players connecting to someone else's hosted session.
 
 Author: s0m3thing_matters  
 Discord Server: https://discord.gg/H3K2xeU96A
+
+---
+btw README was made by ai, yes
+if you are afraid that this file is a virus, check it with virustotal and other services. You can unpack it, the file was packed using pyinstaller, there is no obfuscation.
