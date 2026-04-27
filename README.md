@@ -7,7 +7,6 @@ A desktop application for hosting and joining  Studio team test sessions over th
 ## Requirements
 
 - Windows 10 or later
-- Python 3.10 or later
 - Studio installed (the app locates it automatically)
 - A [Playit.gg](https://playit.gg) account and tunnel (required for remote play, not needed for local testing)
 
