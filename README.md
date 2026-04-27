@@ -43,6 +43,13 @@ Share your Playit.gg tunnel address (the `hostname:port` string) with anyone who
 
 ---
 
+# How set up Playit.gg
+## simple guide
+
+PORT: 55555
+PROTOCOL: UDP
+
+---
 ### Joining a Server
 
 This section is for players connecting to someone else's hosted session.
