@@ -1,4 +1,4 @@
-# Ultimate LocalHost
+# Matt's LocalHost
 
 A desktop application for hosting and joining  Studio team test sessions over the internet using Playit.gg tunnels. Built with Python and Tkinter.
 
