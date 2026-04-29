@@ -7,30 +7,62 @@ import subprocess
 import uuid
 import os
 import atexit
-import signal
+import json
 
 # ==================== CONSTANTS ====================
-PROXY_PORT = 55555
-BG_COLOR      = "#1a1a2e"
-CARD_COLOR    = "#16213e"
-ACCENT_COLOR  = "#0f3460"
-BTN_CREATE    = "#2ecc71"
-BTN_JOIN      = "#3498db"
-BTN_DANGER    = "#e74c3c"
-BTN_WARN      = "#f39c12"
-TEXT_COLOR    = "#eaeaea"
-MUTED_COLOR   = "#95a5a6"
-FONT_TITLE    = ("Segoe UI", 20, "bold")
-FONT_SUB      = ("Segoe UI", 10)
-FONT_LABEL    = ("Segoe UI", 10, "bold")
-FONT_LOG      = ("Consolas", 9)
+PROXY_PORT  = 55555
+DATA_FILE   = "mattslocalhost_data.json"
+
+BG_COLOR    = "#1a1a2e"
+CARD_COLOR  = "#16213e"
+ACCENT_COLOR = "#0f3460"
+BTN_CREATE  = "#2ecc71"
+BTN_JOIN    = "#3498db"
+BTN_DANGER  = "#e74c3c"
+BTN_WARN    = "#f39c12"
+TEXT_COLOR  = "#eaeaea"
+MUTED_COLOR = "#95a5a6"
+FONT_TITLE  = ("Segoe UI", 20, "bold")
+FONT_SUB    = ("Segoe UI", 10)
+FONT_LABEL  = ("Segoe UI", 10, "bold")
+FONT_LOG    = ("Consolas", 9)
+
+# ==================== PERSISTENCE ====================
+
+def load_data() -> dict:
+    """Load saved user data from JSON file. Returns defaults if missing or corrupt."""
+    defaults = {
+        "user_id": "123456789",
+        "host_tunnel": "",
+        "join_tunnel": "",
+        "server_port": "55555",
+    }
+    try:
+        if os.path.exists(DATA_FILE):
+            with open(DATA_FILE, "r", encoding="utf-8") as f:
+                stored = json.load(f)
+            # Merge: keep defaults for any missing keys
+            return {**defaults, **stored}
+    except Exception:
+        pass
+    return defaults
+
+
+def save_data(data: dict):
+    """Persist user data to JSON file, silently ignore errors."""
+    try:
+        with open(DATA_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+    except Exception:
+        pass
+
 
 # ==================== GLOBAL PROXY STATE ====================
-_proxy_running   = threading.Event()   # set = proxy should run
-_proxy_stopped   = threading.Event()   # set = worker thread has exited
-_udp_sockets     = []
-_proxy_lock      = threading.Lock()
-_proxy_thread    = None
+_proxy_running  = threading.Event()   # set = proxy should run
+_proxy_stopped  = threading.Event()   # set = worker thread has exited
+_udp_sockets    = []
+_proxy_lock     = threading.Lock()
+_proxy_thread   = None
 
 
 # ==================== HELPERS ====================
@@ -388,6 +420,9 @@ class App(tk.Tk):
         self.studio_path = ""
         self._frame      = None
 
+        # Load persisted user data on startup
+        self._data = load_data()
+
         # Show splash immediately, resolve Studio in background
         self._show_splash()
 
@@ -487,23 +522,23 @@ class App(tk.Tk):
 
             tk.Label(card, text="User ID:", font=FONT_LABEL,
                      bg=CARD_COLOR, fg=TEXT_COLOR).pack(anchor="w")
-            ent_uid = make_entry(card, "123456789")
+            ent_uid = make_entry(card, self._data.get("user_id", "123456789"))
             ent_uid.pack(fill="x", pady=(2, 10))
 
-            tk.Label(card, text="Playit.gg Address (host:port):",
+            tk.Label(card, text="Tunnel Address (host:port):",
                      font=FONT_LABEL, bg=CARD_COLOR, fg=TEXT_COLOR).pack(anchor="w")
-            ent_playit = make_entry(card, "")
-            ent_playit.pack(fill="x", pady=(2, 10))
+            ent_tunnel = make_entry(card, self._data.get("host_tunnel", ""))
+            ent_tunnel.pack(fill="x", pady=(2, 10))
 
             tk.Label(card, text="TeamTest Server Port:",
                      font=FONT_LABEL, bg=CARD_COLOR, fg=TEXT_COLOR).pack(anchor="w")
-            ent_port = make_entry(card, "55555")
+            ent_port = make_entry(card, self._data.get("server_port", "55555"))
             ent_port.pack(fill="x", pady=(2, 4))
 
             def on_create():
-                uid   = ent_uid.get().strip()
-                playit = ent_playit.get().strip()
-                port  = ent_port.get().strip()
+                uid    = ent_uid.get().strip()
+                tunnel = ent_tunnel.get().strip()
+                port   = ent_port.get().strip()
                 if not uid or not port:
                     messagebox.showwarning("Missing fields",
                                            "Please fill in User ID and Port.")
@@ -515,7 +550,14 @@ class App(tk.Tk):
                     messagebox.showerror("Studio not found",
                                          "Could not locate RobloxStudioBeta.exe.")
                     return
-                self._show_host_running(uid, playit, port)
+
+                # Persist entered values before launching
+                self._data["user_id"]     = uid
+                self._data["host_tunnel"] = tunnel
+                self._data["server_port"] = port
+                save_data(self._data)
+
+                self._show_host_running(uid, tunnel, port)
 
             btn_row = tk.Frame(f, bg=BG_COLOR)
             btn_row.pack(pady=18)
@@ -529,7 +571,7 @@ class App(tk.Tk):
     # ──────────────────────────────────────────────────────────
     # HOST RUNNING SCREEN
     # ──────────────────────────────────────────────────────────
-    def _show_host_running(self, user_id: str, playit_addr: str, port: str):
+    def _show_host_running(self, user_id: str, tunnel_addr: str, port: str):
         p_guid = generate_guid()
         t_guid = generate_guid()
 
@@ -573,8 +615,8 @@ class App(tk.Tk):
                 log(f"Play GUID   : {t_guid}")
                 log(f"Port        : {port}")
                 log(f"User ID     : {user_id}")
-                if playit_addr:
-                    log(f"Playit addr : {playit_addr}")
+                if tunnel_addr:
+                    log(f"Tunnel addr : {tunnel_addr}")
                 log("Launching server process...")
                 try:
                     launch_server(self.studio_path, port, user_id, p_guid, t_guid)
@@ -609,16 +651,16 @@ class App(tk.Tk):
     # ──────────────────────────────────────────────────────────
     def _show_join_menu(self):
         def build(f):
-            tk.Label(f, text="Join via Playit.gg Tunnel",
+            tk.Label(f, text="Join via Tunnel",
                      font=("Segoe UI", 14, "bold"),
                      bg=BG_COLOR, fg=TEXT_COLOR).pack(pady=(40, 20))
 
             card = tk.Frame(f, bg=CARD_COLOR, padx=24, pady=20)
             card.pack(padx=40, fill="x")
 
-            tk.Label(card, text="Playit.gg Address (host:port):",
+            tk.Label(card, text="Tunnel Address (host:port):",
                      font=FONT_LABEL, bg=CARD_COLOR, fg=TEXT_COLOR).pack(anchor="w")
-            ent_addr = make_entry(card, "")
+            ent_addr = make_entry(card, self._data.get("join_tunnel", ""))
             ent_addr.pack(fill="x", pady=(2, 4))
 
             def on_join():
@@ -627,7 +669,7 @@ class App(tk.Tk):
                     messagebox.showerror(
                         "Invalid address",
                         "Format must be  host:port\n"
-                        "e.g. urplayitt.gl.at.ply.gg:6767"
+                        "e.g. my.tunnel.example.com:6767"
                     )
                     return
                 if not self.studio_path:
@@ -639,6 +681,11 @@ class App(tk.Tk):
                 if not dst_port_str.isdigit():
                     messagebox.showerror("Invalid port", "Port must be a number.")
                     return
+
+                # Persist the tunnel address before launching
+                self._data["join_tunnel"] = raw
+                save_data(self._data)
+
                 self._show_join_running(dst_host, int(dst_port_str))
 
             btn_row = tk.Frame(f, bg=BG_COLOR)
@@ -712,7 +759,6 @@ class App(tk.Tk):
                     )
                     self.after(0, lambda: status_var.set(
                         "● CONNECTED — Studio launched"))
-                    #log("Studio client started. Forwarding packets...")
                 except Exception as e:
                     log(f"ERROR launching Studio: {e}")
                     self.after(0, lambda: status_var.set(
