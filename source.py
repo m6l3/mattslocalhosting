@@ -63,6 +63,7 @@ _proxy_stopped  = threading.Event()   # set = worker thread has exited
 _udp_sockets    = []
 _proxy_lock     = threading.Lock()
 _proxy_thread   = None
+_active_port    = None  # Stores the actual port being used
 
 
 # ==================== HELPERS ====================
@@ -94,14 +95,31 @@ def ts() -> str:
     return time.strftime("%H:%M:%S")
 
 
-# ==================== UDP PROXY ====================
-def start_udp_proxy(dst_host: str, dst_port: int, log_fn) -> bool:
+def find_free_port(start_port: int, max_attempts: int = 100) -> int:
     """
-    Start a UDP proxy on 127.0.0.1:PROXY_PORT -> dst_host:dst_port.
-    Returns True on successful bind, False otherwise.
+    Find a free port starting from start_port.
+    Returns the free port number or -1 if none found.
+    """
+    for port in range(start_port, start_port + max_attempts):
+        try:
+            test_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            test_sock.bind(("127.0.0.1", port))
+            test_sock.close()
+            return port
+        except OSError:
+            continue
+    return -1
+
+
+# ==================== UDP PROXY ====================
+def start_udp_proxy(dst_host: str, dst_port: int, log_fn) -> tuple:
+    """
+    Start a UDP proxy on 127.0.0.1 -> dst_host:dst_port.
+    Automatically finds a free port starting from PROXY_PORT.
+    Returns (success: bool, actual_port: int).
     Guarantees the worker thread exits when _proxy_running is cleared.
     """
-    global _proxy_thread
+    global _proxy_thread, _active_port
 
     # Safety: stop any existing proxy first
     if _proxy_running.is_set():
@@ -112,23 +130,36 @@ def start_udp_proxy(dst_host: str, dst_port: int, log_fn) -> bool:
 
     ready_event = threading.Event()
     error_box   = [None]
+    port_box    = [None]
 
     def worker():
         client_sessions: dict = {}
         local_sock = None
+        bound_port = None
+        
         try:
             dst_ip = socket.gethostbyname(dst_host)
             log_fn(f"Resolved {dst_host} -> {dst_ip}")
 
+            # Find a free port
+            bound_port = find_free_port(PROXY_PORT)
+            if bound_port == -1:
+                raise OSError(f"No free ports available starting from {PROXY_PORT}")
+            
+            port_box[0] = bound_port
+            
+            if bound_port != PROXY_PORT:
+                log_fn(f"Port {PROXY_PORT} is busy, using port {bound_port} instead")
+
             local_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             local_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            local_sock.bind(("127.0.0.1", PROXY_PORT))
+            local_sock.bind(("127.0.0.1", bound_port))
             local_sock.settimeout(0.3)
 
             with _proxy_lock:
                 _udp_sockets.append(local_sock)
 
-            log_fn(f"UDP Proxy bound on 127.0.0.1:{PROXY_PORT}")
+            log_fn(f"UDP Proxy bound on 127.0.0.1:{bound_port}")
             ready_event.set()
 
             while _proxy_running.is_set():
@@ -207,8 +238,10 @@ def start_udp_proxy(dst_host: str, dst_port: int, log_fn) -> bool:
     if error_box[0]:
         log_fn(f"Proxy error: {error_box[0]}")
         _proxy_running.clear()
-        return False
-    return True
+        return (False, -1)
+    
+    _active_port = port_box[0]
+    return (True, port_box[0])
 
 
 def stop_udp_proxy(wait: bool = True):
@@ -217,7 +250,7 @@ def stop_udp_proxy(wait: bool = True):
     and optionally wait for the worker thread to finish.
     Safe to call multiple times.
     """
-    global _proxy_thread
+    global _proxy_thread, _active_port
 
     if not _proxy_running.is_set():
         return
@@ -237,6 +270,7 @@ def stop_udp_proxy(wait: bool = True):
         _proxy_stopped.wait(timeout=3)
 
     _proxy_thread = None
+    _active_port = None
 
 
 # Register cleanup on interpreter exit
@@ -731,18 +765,17 @@ class App(tk.Tk):
 
             def run():
                 log(f"Target      : {dst_host}:{dst_port}")
-                log(f"Local proxy : 127.0.0.1:{PROXY_PORT}")
-                log("Starting UDP proxy...")
+                log(f"Attempting to bind proxy starting from port {PROXY_PORT}...")
 
-                ok = start_udp_proxy(dst_host, dst_port, log)
+                success, actual_port = start_udp_proxy(dst_host, dst_port, log)
 
-                if not ok:
+                if not success:
                     self.after(0, lambda: status_var.set(
                         "● PROXY FAILED — check log"))
-                    log("Could not bind proxy. Port may already be in use.")
+                    log("Could not bind proxy. No free ports available.")
                     return
 
-                log("Proxy is active.")
+                log(f"Proxy is active on 127.0.0.1:{actual_port}")
                 log("Launching Studio client...")
 
                 p_guid = generate_guid()
@@ -753,12 +786,12 @@ class App(tk.Tk):
                 try:
                     launch_client(
                         self.studio_path,
-                        "127.0.0.1", str(PROXY_PORT),
+                        "127.0.0.1", str(actual_port),
                         p_guid, t_guid,
                         "StudioPlayer_Proxy"
                     )
                     self.after(0, lambda: status_var.set(
-                        "● CONNECTED — Studio launched"))
+                        f"● CONNECTED — Studio launched (port {actual_port})"))
                 except Exception as e:
                     log(f"ERROR launching Studio: {e}")
                     self.after(0, lambda: status_var.set(
