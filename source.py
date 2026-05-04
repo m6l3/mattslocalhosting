@@ -118,6 +118,37 @@ def find_free_port(start_port: int, max_attempts: int = 100) -> int:
     return -1
 
 
+# ==================== UDP PROXY WARM-UP ====================
+def warmup_udp_tunnel(dst_host: str, dst_port: int, log_fn,
+                      packets: int = 10, delay: float = 0.05):
+    """
+    Send a handful of throwaway UDP packets to the tunnel endpoint so that
+    any stateful NAT / proxy on the remote side learns the return path before
+    Roblox Studio sends its first real packet.
+
+    UDP has no handshake, so the first real packet can be silently dropped if
+    the remote proxy hasn't recorded our source address yet.  Priming the path
+    with cheap dummy data gives it a valid mapping to work with.
+    """
+    log_fn(f"Warming up tunnel {dst_host}:{dst_port} ({packets} packets)...")
+    try:
+        dst_ip = socket.gethostbyname(dst_host)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.settimeout(0.5)
+        # 64 bytes of zeros — small enough to be cheap, big enough to matter
+        payload = b"\x00" * 64
+        for i in range(packets):
+            try:
+                sock.sendto(payload, (dst_ip, dst_port))
+            except OSError:
+                pass
+            time.sleep(delay)
+        sock.close()
+        log_fn("Tunnel warm-up done.")
+    except Exception as e:
+        log_fn(f"Warm-up warning (non-fatal): {e}")
+
+
 # ==================== UDP PROXY ====================
 def start_udp_proxy(dst_host: str, dst_port: int, log_fn) -> tuple:
     global _proxy_thread, _active_port
@@ -293,10 +324,6 @@ def _darken(color: str, amount: float) -> str:
 # ==================== ANIMATED BUTTON (factory) ====================
 def AnimButton(parent, text, color, command,
                width=160, height=40, font=FONT_BTN, **kw):
-    """
-    Plain tk.Button with hover/press colour animations.
-    No widget subclassing - safe on Python 3.14.
-    """
     normal_bg = color
     hover_bg  = _lighten(color, 0.18)
     press_bg  = _darken(color,  0.15)
@@ -330,10 +357,6 @@ def AnimButton(parent, text, color, command,
 
 # ==================== ANIMATED ENTRY (factory) ====================
 def AnimEntry(parent, placeholder="", width=38, **kw):
-    """
-    Returns a border-frame containing a styled tk.Entry.
-    Border colour changes on focus. Frame exposes .get() directly.
-    """
     border = tk.Frame(parent, bg=BORDER_COLOR, padx=1, pady=1, **kw)
     entry = tk.Entry(
         border,
@@ -385,7 +408,6 @@ class SplashScreen(tk.Toplevel):
         sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
         self.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
 
-        # Animated border
         self._canvas = tk.Canvas(self, width=w, height=h,
                                  bg=BG_COLOR, highlightthickness=0)
         self._canvas.place(x=0, y=0)
@@ -410,7 +432,6 @@ class SplashScreen(tk.Toplevel):
                                     font=("Consolas", 9), bg=BG_COLOR, fg=MUTED_COLOR)
         self._status_lbl.pack(side="left", padx=(8, 0))
 
-        # Progress bar
         bar_bg = tk.Frame(inner, bg="#0d1b2a", height=3, width=340)
         bar_bg.pack(pady=(20, 0))
         bar_bg.pack_propagate(False)
@@ -432,7 +453,6 @@ class SplashScreen(tk.Toplevel):
         w, h = 400, 220
         c.delete("border")
         t = self._border_t
-        # Rotating gradient-like border
         clr = f"#{int(0+80*(0.5+0.5*math.sin(t))):02x}{int(180+50*(0.5+0.5*math.sin(t+1))):02x}{int(200+55*(0.5+0.5*math.sin(t+2))):02x}"
         c.create_rectangle(0, 0, w-1, h-1, outline=clr, width=2, tags="border")
         self._border_t += 0.06
@@ -461,18 +481,15 @@ class SplashScreen(tk.Toplevel):
 
 # ==================== TRANSITION ENGINE ====================
 class TransitionManager:
-    """Handles fade+slide transitions between frames."""
     def __init__(self, root: tk.Tk):
         self._root  = root
         self._frame = None
         self._busy  = False
 
     def swap(self, builder, direction="right"):
-        """Replace current frame with a new one, animated."""
         old_frame = self._frame
         w = self._root.winfo_width() or 560
 
-        # Build new frame off-screen
         new_frame = tk.Frame(self._root, bg=BG_COLOR)
         new_frame.place(x=w, y=0, relwidth=1, relheight=1)
         builder(new_frame)
@@ -485,7 +502,7 @@ class TransitionManager:
         steps  = 12
         offset = w if direction == "right" else -w
         dx_new = -offset / steps
-        dx_old = offset / steps   # old slides opposite
+        dx_old = offset / steps
 
         positions_new = [int(offset + dx_new * i) for i in range(1, steps + 1)]
         positions_old = [int(dx_old * i) for i in range(1, steps + 1)]
@@ -526,7 +543,6 @@ class App(tk.Tk):
 
     def _update_title(self):
         if self.studio_path:
-            short = os.path.basename(os.path.dirname(self.studio_path))
             self.title(f"Matt's LocalHost  —  Studio found: {self.studio_path}")
         else:
             self.title("Matt's LocalHost  —  Studio NOT found")
@@ -578,7 +594,6 @@ class App(tk.Tk):
         hdr = tk.Frame(parent, bg=BG_COLOR)
         hdr.pack(fill="x", pady=(20, 0))
 
-        # Cyan accent bar
         bar = tk.Frame(hdr, bg=ACCENT_CYAN, height=2)
         bar.pack(fill="x", padx=20)
 
@@ -600,10 +615,8 @@ class App(tk.Tk):
         stop_udp_proxy(wait=False)
 
         def build(f):
-            # Top decorative bar
             tk.Frame(f, bg=ACCENT_CYAN, height=2).pack(fill="x")
 
-            # Title area with subtle grid bg
             title_area = tk.Frame(f, bg=BG_COLOR)
             title_area.pack(fill="x", pady=(30, 0))
 
@@ -617,7 +630,6 @@ class App(tk.Tk):
                      font=("Consolas", 9),
                      bg=BG_COLOR, fg=MUTED_COLOR).pack(pady=(4, 0))
 
-            # Status pill
             status_color = ACCENT_GREEN if self.studio_path else ACCENT_RED
             status_text  = "● STUDIO READY" if self.studio_path else "● STUDIO NOT FOUND"
             pill = tk.Frame(f, bg=BG2_COLOR)
@@ -627,10 +639,8 @@ class App(tk.Tk):
                      bg=BG2_COLOR, fg=status_color,
                      padx=12, pady=4).pack()
 
-            # Separator
             tk.Frame(f, bg=BORDER_COLOR, height=1).pack(fill="x", padx=40, pady=24)
 
-            # Buttons
             btn_row = tk.Frame(f, bg=BG_COLOR)
             btn_row.pack()
 
@@ -644,7 +654,6 @@ class App(tk.Tk):
                 self._show_join_menu, width=190, height=46
             ).pack(side="left", padx=16)
 
-            # Footer
             tk.Frame(f, bg=BORDER_COLOR, height=1).pack(fill="x", padx=20, side="bottom", pady=(0, 4))
             tk.Label(f, text="by @s0m3thing_matters  •  discord.gg/H3K2xeU96A",
                      font=("Consolas", 12),
@@ -731,7 +740,6 @@ class App(tk.Tk):
                 lambda: self._join_local(port, p_guid, t_guid),
                 width=170, height=38
             )
-            # Not shown until server is live
             AnimButton(btn_row, "← BACK", BTN_BACK,
                        self._show_welcome, width=110, height=38).pack(side="left", padx=8)
 
@@ -848,6 +856,15 @@ class App(tk.Tk):
 
             def run():
                 log(f"Target : {dst_host}:{dst_port}")
+                # ── WARM-UP: prime the tunnel path before starting the proxy ──
+                # UDP has no handshake, so the remote proxy won't know where to
+                # route replies until it sees our first outbound packet.  If that
+                # first packet gets dropped (common on cheaper tunnel setups) the
+                # whole session silently fails.  Sending a few dummy packets first
+                # gives the remote side a valid return mapping before Roblox's
+                # real traffic arrives.
+                warmup_udp_tunnel(dst_host, dst_port, log)
+                # ─────────────────────────────────────────────────────────────
                 log(f"Binding proxy from port {PROXY_PORT}...")
                 success, actual_port = start_udp_proxy(dst_host, dst_port, log)
                 if not success:
