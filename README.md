@@ -8,7 +8,7 @@ A desktop application for hosting and joining  Studio team test sessions over th
 
 - Windows 10 or later
 - Studio installed (the app locates it automatically)
-- A [Playit.gg](https://playit.gg) account and tunnel (required for remote play, not needed for local testing)
+- A tunnel (required for remote play, not needed for local testing)
 
 Install Python dependencies (standard library only — no pip install required).
 
@@ -33,17 +33,17 @@ This section is for the person who wants to create and share a game session.
 1. On the welcome screen, click **Create Server**.
 2. Fill in the following fields:
    - **User ID** — your numeric user ID. You can find it in your profile URL (`.com/users/XXXXXXXXXX/profile`).
-   - **Playit.gg Address** — the tunnel address provided by Playit.gg in the format `hostname:port` (e.g. `ur-shit.gl.at.ply.gg:6767`). Leave this blank if you only intend to test locally.
-   - **TeamTest Server Port** — the port Studio will listen on. Default is `55555`(same as in your playit.gg settings). Change this only if the port is already in use on your machine.
+   - **Tunnel Address** — the tunnel address provided by tunnel service in the format `hostname:port` (e.g. `ur-shit.tunnel.gg:6767`). Leave this blank if you only intend to test locally.
+   - **TeamTest Server Port** — the port Studio will listen on. Default is `55555`(same as in your tunnel settings). Change this only if the port is already in use on your machine.
 3. Click **Create**. The server console will open and Studio will launch automatically as a TeamTest server.
 4. Wait approximately 5 seconds for Studio to initialize. Once the status reads **SERVER IS LIVE**, the server is ready.
 5. To join the server yourself from the same machine, click **Join This Server (local)**. This launches a Studio client connected directly to your local server.
 
-Share your Playit.gg tunnel address (the `hostname:port` string) with anyone who wants to join remotely.
+Share your Tunnel tunnel address (the `hostname:port` string) with anyone who wants to join remotely.
 
 ---
 
-# How set up Playit.gg
+# How set up Tunnel
 ## simple guide
 
 PORT: 55555
@@ -55,7 +55,7 @@ PROTOCOL: UDP
 This section is for players connecting to someone else's hosted session.
 
 1. On the welcome screen, click **Join Server**.
-2. Enter the Playit.gg tunnel address provided by the host, in the format `hostname:port`.
+2. Enter the tunnel address provided by the host, in the format `hostname:port`.
 3. Click **Join**. The connection console will open and the application will establish a connection to the remote server.
 4. Studio will launch automatically as a client. Wait for it to connect — you will see incoming packets logged in the console once the session is active.
 5. To disconnect, click **Disconnect & Back**. This cleanly shuts down the connection and returns you to the main menu.
