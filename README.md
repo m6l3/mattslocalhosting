@@ -2,6 +2,8 @@
 
 Decided to fork this app as **it has some legitimate uses** aside from the stuff that certain people are (unfortunately) doing
 
+---
+
 # Matt's LocalHost
 
 A desktop application for hosting and joining  Studio team test sessions over the internet using tunnels. Built with Python and Tkinter.
@@ -68,8 +70,7 @@ This section is for players connecting to someone else's hosted session.
 
 ## Credits
 
-Author: s0m3thing_matters  
-Discord Server: https://discord.gg/H3K2xeU96A
+Author: s0m3thing_matters
 
 ---
 btw README was made by ai, yes
