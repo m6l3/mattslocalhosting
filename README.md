@@ -1,3 +1,7 @@
+# Fork Note
+
+Decided to fork this app as **it has some legitimate uses** aside from the stuff that certain people are (unfortunately) doing
+
 # Matt's LocalHost
 
 A desktop application for hosting and joining  Studio team test sessions over the internet using tunnels. Built with Python and Tkinter.
